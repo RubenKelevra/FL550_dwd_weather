@@ -198,6 +198,10 @@ class DWDWeatherData:
     def _update(self):
         """Get the latest data from DWD."""
         timestamp = datetime.now(timezone.utc)
+        # Update precipitation more often
+        if timestamp.minute % 5 != 0 or self.latest_update is None:
+            self._update_radar_precipitation()
+
         if timestamp.minute % 10 != 0 and self.latest_update is not None:
             return False
 
@@ -223,8 +227,6 @@ class DWDWeatherData:
             with_uv=True,
             with_apparent_temperature=self.supports_apparent_temperature(),
         )
-
-        self._update_radar_precipitation()
 
         if self._config.get(CONF_DOWNLOAD_AIRQUALITY, False):
             if self._airquality_hourly is not None:
