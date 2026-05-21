@@ -24,6 +24,8 @@ from custom_components.dwd_weather.const import (
     CONF_MAP_TYPE,
     CONF_MAP_TYPE_CUSTOM,
     CONF_MAP_TYPE_GERMANY,
+    CONF_RADAR_CUSTOM_LOCATION,
+    CONF_RADAR_LOCATION_COORDINATES,
     CONF_SENSOR_FORECAST_STEPS,
     CONF_STATION_ID,
     CONF_STATION_NAME,
@@ -140,6 +142,8 @@ async def test_station_configure_creates_entry():
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_STATION_ID] == "L732"
     assert result["data"][CONF_STATION_NAME] == "Berlin"
+    assert result["data"][CONF_RADAR_CUSTOM_LOCATION] is False
+    assert CONF_RADAR_LOCATION_COORDINATES not in result["data"]
 
 
 @pytest.mark.asyncio
@@ -393,3 +397,191 @@ async def test_options_flow_hides_apparent_temperature_when_not_supported():
         result["data_schema"],
         CONF_DOWNLOAD_PRECIPITATION_SENSORS,
     )
+
+
+@pytest.mark.asyncio
+async def test_station_configure_form_has_radar_custom_location_fields():
+    """Station configure form should not include radar location fields."""
+    flow = DWDWeatherConfigFlow()
+    flow.hass = MagicMock()
+    flow.hass.config.latitude = 52.5
+    flow.hass.config.longitude = 13.4
+    flow.config_data = {CONF_STATION_ID: "L732"}
+
+    with (
+        patch(
+            "custom_components.dwd_weather.config_flow.dwdforecast.load_station_id",
+            return_value={"report_available": 1, "name": "Berlin", "elev": 34},
+        ),
+        patch(
+            "custom_components.dwd_weather.config_flow.dwdforecast.Weather",
+            return_value=MagicMock(),
+        ),
+    ):
+        result = await flow.async_step_station_configure()
+
+    assert result["type"] == FlowResultType.FORM
+    assert not _schema_has_field(result["data_schema"], CONF_RADAR_CUSTOM_LOCATION)
+    assert not _schema_has_field(result["data_schema"], CONF_RADAR_LOCATION_COORDINATES)
+
+
+@pytest.mark.asyncio
+async def test_station_configure_saves_radar_custom_location():
+    """Station configure should route to radar location step when precipitation sensors are enabled."""
+    flow = DWDWeatherConfigFlow()
+    flow.hass = MagicMock()
+    flow.async_set_unique_id = AsyncMock(return_value=None)
+    flow.config_data = {
+        CONF_STATION_ID: "L732",
+        CONF_DATA_TYPE: CONF_DATA_TYPE_FORECAST,
+    }
+
+    result = await flow.async_step_station_configure(
+        {
+            CONF_STATION_NAME: "Berlin",
+            "wind_direction_type": "degrees",
+            CONF_INTERPOLATE: True,
+            "hourly_update": False,
+            CONF_DOWNLOAD_AIRQUALITY: False,
+            CONF_DOWNLOAD_APPARENT_TEMPERATURE: False,
+            CONF_DOWNLOAD_PRECIPITATION_SENSORS: True,
+            CONF_SENSOR_FORECAST_STEPS: 10,
+            "additional_forecast_attributes": False,
+            "daily_temp_high_precision": False,
+        }
+    )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "station_configure_radar_location"
+
+
+@pytest.mark.asyncio
+async def test_station_configure_radar_location_creates_entry():
+    """Radar location step should persist coordinates and create entry."""
+    flow = DWDWeatherConfigFlow()
+    flow.hass = MagicMock()
+    flow.config_data = {
+        CONF_STATION_ID: "L732",
+        CONF_STATION_NAME: "Berlin",
+        CONF_DATA_TYPE: CONF_DATA_TYPE_FORECAST,
+        CONF_RADAR_CUSTOM_LOCATION: True,
+    }
+
+    result = await flow.async_step_station_configure_radar_location(
+        {
+            CONF_RADAR_CUSTOM_LOCATION: True,
+            CONF_RADAR_LOCATION_COORDINATES: {"latitude": 48.1, "longitude": 11.6},
+        }
+    )
+
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_RADAR_CUSTOM_LOCATION] is True
+    assert result["data"][CONF_RADAR_LOCATION_COORDINATES] == {
+        "latitude": 48.1,
+        "longitude": 11.6,
+    }
+
+
+@pytest.mark.asyncio
+async def test_options_flow_shows_radar_custom_location_fields():
+    """Options flow init should not show radar location fields for station entities."""
+    flow = OptionsFlowHandler()
+    flow.hass = MagicMock()
+    flow.hass.config.latitude = 52.5
+    flow.hass.config.longitude = 13.4
+    config_entry = MagicMock()
+    config_entry.data = dict(MOCK_CONFIG)
+    config_entry.options = {}
+
+    with (
+        patch(
+            "custom_components.dwd_weather.config_flow.dwdforecast.Weather",
+            return_value=MagicMock(),
+        ),
+        patch.object(
+            OptionsFlowHandler,
+            "config_entry",
+            new_callable=PropertyMock,
+            return_value=config_entry,
+        ),
+    ):
+        result = await flow.async_step_init()
+
+    assert result["type"] == FlowResultType.FORM
+    assert not _schema_has_field(result["data_schema"], CONF_RADAR_CUSTOM_LOCATION)
+    assert not _schema_has_field(result["data_schema"], CONF_RADAR_LOCATION_COORDINATES)
+
+
+@pytest.mark.asyncio
+async def test_options_flow_station_routes_to_radar_location_step_when_enabled():
+    """Options flow should ask for radar config in a dedicated step when precipitation sensors are enabled."""
+    flow = OptionsFlowHandler()
+    flow.hass = MagicMock()
+    flow.hass.config_entries = MagicMock()
+    config_entry = MagicMock()
+    config_entry.data = dict(MOCK_CONFIG)
+    config_entry.options = {}
+
+    with (
+        patch(
+            "custom_components.dwd_weather.config_flow.dwdforecast.Weather",
+            return_value=MagicMock(),
+        ),
+        patch.object(
+            OptionsFlowHandler,
+            "config_entry",
+            new_callable=PropertyMock,
+            return_value=config_entry,
+        ),
+    ):
+        result = await flow.async_step_init(
+            {
+                CONF_DATA_TYPE: CONF_DATA_TYPE_FORECAST,
+                "wind_direction_type": "degrees",
+                CONF_INTERPOLATE: True,
+                "hourly_update": False,
+                CONF_DOWNLOAD_AIRQUALITY: False,
+                CONF_DOWNLOAD_APPARENT_TEMPERATURE: False,
+                CONF_DOWNLOAD_PRECIPITATION_SENSORS: True,
+                CONF_SENSOR_FORECAST_STEPS: 10,
+                "additional_forecast_attributes": False,
+                "daily_temp_high_precision": False,
+            }
+        )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "station_radar_location"
+
+
+@pytest.mark.asyncio
+async def test_options_flow_station_radar_location_updates_entry():
+    """Station radar location options step should update entry with coordinates."""
+    flow = OptionsFlowHandler()
+    flow.hass = MagicMock()
+    flow.hass.config_entries = MagicMock()
+    config_entry = MagicMock()
+    config_entry.data = dict(MOCK_CONFIG)
+    config_entry.options = {}
+    flow.config_data = {
+        **dict(MOCK_CONFIG),
+        CONF_RADAR_CUSTOM_LOCATION: True,
+    }
+
+    with patch.object(
+        OptionsFlowHandler,
+        "config_entry",
+        new_callable=PropertyMock,
+        return_value=config_entry,
+    ):
+        result = await flow.async_step_station_radar_location(
+            {
+                CONF_RADAR_CUSTOM_LOCATION: True,
+                CONF_RADAR_LOCATION_COORDINATES: {"latitude": 48.1, "longitude": 11.6},
+            }
+        )
+
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_RADAR_LOCATION_COORDINATES] == {
+        "latitude": 48.1,
+        "longitude": 11.6,
+    }

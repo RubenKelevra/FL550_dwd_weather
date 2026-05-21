@@ -450,3 +450,70 @@ def test_get_airquality_hourly_with_integer_forecast_steps(mock_dwd_data):
     assert len(result) == 2
     assert result[0]["value"]["PM2_5"] == 10.0
     assert result[1]["value"]["PM2_5"] == 11.0
+
+
+def test_update_radar_precipitation_uses_station_coords_by_default(mock_dwd_data):
+    """Radar precipitation update should use station coordinates when custom location is disabled."""
+    mock_dwd_data._config["download_precipitation_sensors"] = True
+    mock_dwd_data._config["radar_custom_location"] = False
+
+    mock_dwd_data.dwd_weather.get_radar_precipitation_forecast = MagicMock(
+        return_value={}
+    )
+    mock_dwd_data.dwd_weather.get_radar_next_precipitation = MagicMock(return_value={})
+
+    mock_dwd_data._update_radar_precipitation()
+
+    mock_dwd_data.dwd_weather.get_radar_precipitation_forecast.assert_called_once_with(
+        shouldUpdate=True
+    )
+    mock_dwd_data.dwd_weather.get_radar_next_precipitation.assert_called_once_with(
+        shouldUpdate=False
+    )
+
+
+def test_update_radar_precipitation_uses_custom_coords_when_enabled(mock_dwd_data):
+    """Radar precipitation update should pass custom coordinates when toggle is enabled."""
+    mock_dwd_data._config["download_precipitation_sensors"] = True
+    mock_dwd_data._config["radar_custom_location"] = True
+    mock_dwd_data._config["radar_location_coordinates"] = {
+        "latitude": 48.1,
+        "longitude": 11.6,
+    }
+
+    mock_dwd_data.dwd_weather.get_radar_precipitation_forecast = MagicMock(
+        return_value={}
+    )
+    mock_dwd_data.dwd_weather.get_radar_next_precipitation = MagicMock(return_value={})
+
+    mock_dwd_data._update_radar_precipitation()
+
+    mock_dwd_data.dwd_weather.get_radar_precipitation_forecast.assert_called_once_with(
+        shouldUpdate=True, lat=48.1, lon=11.6
+    )
+    mock_dwd_data.dwd_weather.get_radar_next_precipitation.assert_called_once_with(
+        shouldUpdate=False, lat=48.1, lon=11.6
+    )
+
+
+def test_update_radar_precipitation_falls_back_to_station_when_coords_missing(
+    mock_dwd_data,
+):
+    """Radar precipitation update should fall back to station coords when custom coords are absent."""
+    mock_dwd_data._config["download_precipitation_sensors"] = True
+    mock_dwd_data._config["radar_custom_location"] = True
+    mock_dwd_data._config["radar_location_coordinates"] = {}
+
+    mock_dwd_data.dwd_weather.get_radar_precipitation_forecast = MagicMock(
+        return_value={}
+    )
+    mock_dwd_data.dwd_weather.get_radar_next_precipitation = MagicMock(return_value={})
+
+    mock_dwd_data._update_radar_precipitation()
+
+    mock_dwd_data.dwd_weather.get_radar_precipitation_forecast.assert_called_once_with(
+        shouldUpdate=True
+    )
+    mock_dwd_data.dwd_weather.get_radar_next_precipitation.assert_called_once_with(
+        shouldUpdate=False
+    )

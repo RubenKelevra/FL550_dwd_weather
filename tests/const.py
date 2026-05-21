@@ -27,6 +27,8 @@ from custom_components.dwd_weather.const import (
     CONF_MAP_HOMEMARKER,
     CONF_MAP_CENTERMARKER,
     CONF_MAP_DARK_MODE,
+    CONF_RADAR_CUSTOM_LOCATION,
+    CONF_RADAR_LOCATION_COORDINATES,
 )
 
 # ============================================================================
@@ -46,6 +48,8 @@ MOCK_CONFIG: Final = {
     CONF_DOWNLOAD_AIRQUALITY: False,
     CONF_DOWNLOAD_APPARENT_TEMPERATURE: False,
     CONF_DOWNLOAD_PRECIPITATION_SENSORS: False,
+    CONF_RADAR_CUSTOM_LOCATION: False,
+    CONF_RADAR_LOCATION_COORDINATES: {"latitude": 52.5, "longitude": 13.4},
     CONF_INTERPOLATE: True,
     CONF_DAILY_TEMP_HIGH_PRECISION: False,
     CONF_ADDITIONAL_FORECAST_ATTRIBUTES: True,
