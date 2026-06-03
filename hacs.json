@@ -1,6 +1,6 @@
 {
     "name": "Deutscher Wetterdienst",
-    "homeassistant": "2024.10.0",
+    "homeassistant": "2025.8.0",
     "domains": [
         "weather",
         "sensor"
